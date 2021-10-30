@@ -1,0 +1,95 @@
+# fetchcert configuration example / documentation
+# ===============================================
+
+# The UNIX socket the main program listens on.
+socket:
+  # The path to the UNIX socket.
+  path: /tmp/socket
+  # A group name to set as the socket's owner. No group change will occur if
+  # this entry is not set.
+  group: users
+  # The socket's access mode. Defaults to 0640.
+  mode: 0640
+
+# Configuration for the LDAP servers and structure.
+ldap:
+
+  structure:
+    # Base DN that will be appended to certificate DNs
+    base_dn: ou=certificates,dc=example,dc=org
+    # Name of the attribute that will contain an end entity certificate
+    # in the LDAP objects.
+    end_entity: userCertificate
+    # Name of the attribute that will contain a CA certificate in the LDAP
+    # objects.
+    ca_certificate: caCertificate
+    # Attribute that will contain the DN of the next certificate in the chain.
+    ca_chaining: seeAlso
+
+  # These are the defaults for the LDAP server connections. May be completely
+  # omitted.
+  defaults:
+    # Port number - usually 389 for clear/starttls or 636 for TLS. Defaults to
+    # 389.
+    port: 636
+    # TLS mode. This must be either "yes" for the non-standard, pure TLS mode,
+    # "starttls" for TLS over a clear connection, or "no" to use a clear
+    # connection. Defaults to "no".
+    tls: yes
+    # Skip server certificate check. Defaults to false.
+    tls_skip_verify: false
+    # CA certificate chain. Can be omitted if the systems' trusted CAs must be
+    # used, or if no TLS is being used.
+    ca_chain: /path/to/ca/chain.pem
+    # LDAP user (as a DN) and password to bind with. Both fields may be
+    # omitted if anonymous binds are to be used.
+    bind_user: cn=fetchcert,ou=automation,dc=example,dc=org
+    bind_password: drowssap
+
+  # Configurations for each LDAP server. Each entry must incluse a "host"
+  # field which defines the host name for the server ; it may also redefine
+  # any of the defaults above.
+  servers:
+    - host: ldap1.example.org
+    - host: ldap2.example.org
+
+# Certificates that must be updated
+certificates:
+
+    # Path to the file to generate
+  - path: /etc/ssl/private/cert1.pem
+    # Access mode, owner and group for the file. May be omitted.
+    mode: 0640
+    owner: root
+    group: somegroup
+    # A list of files to prepend. Can be used to e.g. copy the private key
+    # into this file.
+    prepend_files:
+      - /some/file.pem
+    # DN of the certificate itself. If a base DN is defined in the LDAP
+    # section, it will be appended to this value. Can be omitted if either
+    # the ca or ca_chain_of fields below are in use.
+    certificate: cn=www.example.org,ou=webservers
+    # A list of DNs of CA certificates. The base DN from the LDAP section will
+    # be appended to each entry if defined. If this list is empty and the
+    # ca_chain_of field below is undefined as well, the certificate field
+    # above must be defined.
+    ca: ['cn=root,ou=ca','cn=interm,ou=ca']
+    # Alternatively, CA chaining using the LDAP attribute defined above can
+    # be used by specifying the DN of a certificate here. The certificate
+    # matching the DN will be ignored, it will only be used as the start of
+    # the chain. Using this mechanism is incompatible with usage of the ca
+    # field above.
+    ca_chain_of: cn=www.example.org,ou=webservers
+    # Reverse order. If this is false, the main certificate will be written
+    # first, followed by the first intermediary certificate, and so on until
+    # the root CA certificate is found. If this is true, the first certificate
+    # in the file will be the root CA certificate.
+    reverse: false
+    # A list of files to append to the output.
+    append_files:
+      - /some/other/file.pem
+    # A list of commands that will be executed when the file is replaced.
+    # If one of the commands fails, execution will stop.
+    after_update:
+      - apache2ctl graceful

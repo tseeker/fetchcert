@@ -1,2 +1,4 @@
 bin
 go.sum
+fetchcert
+fetch-certificates.yml
