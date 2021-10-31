@@ -24,9 +24,11 @@ func configureSocket(cfg tSocketConfig) error {
 		}
 	}
 
-	err := os.Chmod(cfg.Path, cfg.Mode)
-	if err != nil {
-		return fmt.Errorf("Cannot set UNIX socket access mode: %w", err)
+	if cfg.Mode != 0 {
+		err := os.Chmod(cfg.Path, cfg.Mode)
+		if err != nil {
+			return fmt.Errorf("Cannot set UNIX socket access mode: %w", err)
+		}
 	}
 
 	return nil
