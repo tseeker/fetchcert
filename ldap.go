@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 
@@ -163,7 +164,11 @@ func (conn *tLdapConn) getEndEntityCertificate(dn string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("DN %s - invalid certificate in attribute %s : %w", dn, eec, err)
 	}
-	return values[0], nil
+	data := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: values[0],
+	})
+	return data, nil
 }
 
 // Get a CA certificate, as well as the value of the chaining field, from
@@ -189,11 +194,14 @@ func (conn *tLdapConn) getCaCertificate(dn string) ([]byte, string, error) {
 	if nFound > 1 {
 		return ca_cert, chain_dn, fmt.Errorf("DN %s - one value expected for %s, %d values found", dn, cc, nFound)
 	} else if nFound == 1 {
-		ca_cert = values[0]
-		_, err := x509.ParseCertificate(ca_cert)
+		_, err := x509.ParseCertificate(values[0])
 		if err != nil {
 			return nil, "", fmt.Errorf("DN %s - invalid certificate in attribute %s : %w", dn, cc, err)
 		}
+		ca_cert = pem.EncodeToMemory(&pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: values[0],
+		})
 	}
 
 	chval := entry.GetAttributeValues(chain)
