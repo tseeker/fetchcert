@@ -70,4 +70,19 @@ func main() {
 		log.WithField("error", err).Fatal("Failed to initialize socket.")
 	}
 	listener.Close()
+
+	conn := getLdapConnection(cfg.LdapConfig)
+	if conn == nil {
+		return
+	}
+	defer conn.close()
+	for i := range cfg.Certificates {
+		builder := NewCertificateBuilder(conn, &cfg.Certificates[i])
+		err := builder.Build()
+		if err != nil {
+			log.WithField("error", err).Error("Failed to build data for certificate '", cfg.Certificates[i].Path)
+			continue
+		}
+		// FIXME: check existing file, try to write
+	}
 }
