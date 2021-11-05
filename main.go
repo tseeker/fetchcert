@@ -80,9 +80,21 @@ func main() {
 		builder := NewCertificateBuilder(conn, &cfg.Certificates[i])
 		err := builder.Build()
 		if err != nil {
-			log.WithField("error", err).Error("Failed to build data for certificate '", cfg.Certificates[i].Path)
+			log.WithField("error", err).Error("Failed to build data for certificate '", cfg.Certificates[i].Path, "'")
 			continue
 		}
-		// FIXME: check existing file, try to write
+		if builder.MustWrite() {
+			err := builder.WriteFile()
+			if err != nil {
+				log.WithField("error", err).Error("Failed to write '", cfg.Certificates[i].Path, "'")
+				continue
+			}
+		}
+		err = builder.UpdatePrivileges()
+		if err != nil {
+			log.WithField("error", err).Error("Failed to update privileges on '", cfg.Certificates[i].Path, "'")
+			continue
+		}
+		// TODO builder.RunCommandsIfChanged()
 	}
 }
