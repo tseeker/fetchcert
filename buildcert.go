@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	"unicode/utf8"
@@ -30,24 +31,39 @@ type (
 	// Certificate building, including the configuration, LDAP connection,
 	// and the array of chunks that's being built.
 	tCertificateBuilder struct {
-		config   *tCertificateFileConfig
-		conn     *tLdapConn
-		logger   *logrus.Entry
-		data     [][]byte
-		text     []byte
+		// The certificate file's current configuration
+		config *tCertificateFileConfig
+		// The LDAP connection to read data from
+		conn *tLdapConn
+		// The command that caused the update
+		command TCommand
+		// The logger to use
+		logger *logrus.Entry
+		// The list of DNs that are involved in generating this certificate. If the
+		// command has a non-'*' selector, the list will be checked for a value
+		// matching the selector befor anything else is done.
+		dnList []string
+		// The various chunks of data that will be written to the resulting PEM file.
+		// Each chunk corresponds to a PEM block.
+		data [][]byte
+		// The output text
+		text []byte
+		// Information about the current file, if it exists.
 		existing *tExistingFileInfo
-		changed  bool
+		// Was the certificate file replaced?
+		changed bool
 	}
 )
 
 // Initialize a certificate file building using a LDAP connection and
 // certificate file configuration.
-func NewCertificateBuilder(conn *tLdapConn, config *tCertificateFileConfig) tCertificateBuilder {
+func NewCertificateBuilder(conn *tLdapConn, config *tCertificateFileConfig, cmd *TCommand) tCertificateBuilder {
 	return tCertificateBuilder{
-		config: config,
-		conn:   conn,
-		logger: log.WithField("file", config.Path),
-		data:   make([][]byte, 0),
+		config:  config,
+		conn:    conn,
+		command: *cmd,
+		logger:  log.WithField("file", config.Path),
+		data:    make([][]byte, 0),
 	}
 }
 
@@ -78,7 +94,25 @@ func (b *tCertificateBuilder) Build() error {
 	return nil
 }
 
-// Check whether the data should be written to disk.
+// Check whether the command's selector matches one of the current certificate
+// file's DNs.
+func (b *tCertificateBuilder) SelectorMatches() bool {
+	if b.command.Selector == "*" {
+		return true
+	}
+	sel := strings.ToLower(b.command.Selector)
+	for _, v := range b.dnList {
+		if strings.ToLower(v) == sel {
+			return true
+		}
+	}
+	b.logger.WithField("selector", b.command.Selector).Debug("Selector does not match.")
+	return false
+}
+
+// Check whether the data should be written to disk. This also caches the
+// file's owner, group and mode. If the update is being forced it will return
+// `true` even if nothing changed.
 func (b *tCertificateBuilder) MustWrite() bool {
 	info, err := os.Lstat(b.config.Path)
 	if err != nil {
@@ -92,7 +126,7 @@ func (b *tCertificateBuilder) MustWrite() bool {
 	eif.group = sys_stat.Gid
 	b.existing = eif
 
-	if sys_stat.Size != int64(len(b.text)) {
+	if b.command.Force || sys_stat.Size != int64(len(b.text)) {
 		return true
 	}
 	existing, err := ioutil.ReadFile(b.config.Path)
@@ -254,6 +288,7 @@ func (b *tCertificateBuilder) appendCertificate() error {
 			dn = "," + dn
 		}
 		dn = b.config.Certificate + dn
+		b.dnList = append(b.dnList, strings.ToLower(dn))
 		b.logger.WithField("dn", dn).Debug("Adding EE certificate from LDAP")
 		data, err := b.conn.GetEndEntityCertificate(dn)
 		if err != nil {
@@ -283,13 +318,15 @@ func (b *tCertificateBuilder) appendListedCaCerts() error {
 		bdn = "," + bdn
 	}
 	for _, dn := range b.config.CACertificates {
-		b.logger.WithField("dn", dn+bdn).Debug("Adding CA certificate from LDAP")
-		data, _, err := b.conn.GetCaCertificate(dn + bdn)
+		full_dn := dn + bdn
+		b.dnList = append(b.dnList, strings.ToLower(full_dn))
+		b.logger.WithField("dn", full_dn).Debug("Adding CA certificate from LDAP")
+		data, _, err := b.conn.GetCaCertificate(full_dn)
 		if err != nil {
 			return err
 		}
 		if data == nil {
-			return fmt.Errorf("No CA certificate at DN '%s'", dn)
+			return fmt.Errorf("No CA certificate at DN '%s'", full_dn)
 		}
 		b.data = append(b.data, data)
 	}
@@ -304,6 +341,7 @@ func (b *tCertificateBuilder) appendChainedCaCerts() error {
 		dn = dn + "," + b.conn.BaseDN()
 	}
 	for {
+		b.dnList = append(b.dnList, strings.ToLower(dn))
 		data, nextDn, err := b.conn.GetCaCertificate(dn)
 		if err != nil {
 			return err

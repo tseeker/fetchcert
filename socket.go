@@ -152,15 +152,17 @@ func executeUpdate(cfg *tConfiguration, cmd *TCommand) bool {
 
 	had_errors := false
 	for i := range cfg.Certificates {
-		// TODO apply selector
-		builder := NewCertificateBuilder(conn, &cfg.Certificates[i])
+		builder := NewCertificateBuilder(conn, &cfg.Certificates[i], cmd)
 		err := builder.Build()
 		if err != nil {
 			log.WithField("error", err).Error("Failed to build data for certificate '", cfg.Certificates[i].Path, "'")
 			had_errors = true
 			continue
 		}
-		if builder.MustWrite() || cmd.Force {
+		if !builder.SelectorMatches() {
+			continue
+		}
+		if builder.MustWrite() {
 			err := builder.WriteFile()
 			if err != nil {
 				log.WithField("error", err).Error("Failed to write '", cfg.Certificates[i].Path, "'")
