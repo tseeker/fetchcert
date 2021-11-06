@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"os/user"
 	"strconv"
 	"syscall"
+	"time"
+	"unicode/utf8"
 
 	"github.com/sirupsen/logrus"
 )
@@ -159,6 +163,50 @@ func (b *tCertificateBuilder) UpdatePrivileges() error {
 		log.Debug("No update to privileges")
 		return nil
 	}
+}
+
+// Run the necessary commands if the certificate file has been modified in
+// any way. Execution will stop at the first failure.
+func (b *tCertificateBuilder) RunCommandsIfChanged() error {
+	if !b.changed {
+		log.Debug("Not running commands")
+		return nil
+	}
+	for i := range b.config.AfterUpdate {
+		err := b.RunCommand(i)
+		if err != nil {
+			return fmt.Errorf(
+				"Failed while executing command '%s': %w",
+				b.config.AfterUpdate[i],
+				err,
+			)
+		}
+	}
+	return nil
+}
+
+// Run a command through the `sh` shell.
+func (b *tCertificateBuilder) RunCommand(pos int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	log := b.logger.WithField("command", b.config.AfterUpdate[pos])
+	log.Debug("Executing command")
+	cmd := exec.CommandContext(ctx, "sh", "-c", b.config.AfterUpdate[pos])
+	output, err := cmd.CombinedOutput()
+	if len(output) != 0 {
+		if utf8.Valid(output) {
+			log = log.WithField("output", string(output))
+		} else {
+			log = log.WithField("output", string(output))
+		}
+	}
+	if err == nil {
+		log.Info("Command executed")
+	} else {
+		log.WithField("error", err).Error("Command failed")
+	}
+	return err
 }
 
 // Append PEM files from a list.

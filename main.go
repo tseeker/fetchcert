@@ -95,6 +95,6 @@ func main() {
 			log.WithField("error", err).Error("Failed to update privileges on '", cfg.Certificates[i].Path, "'")
 			continue
 		}
-		// TODO builder.RunCommandsIfChanged()
+		builder.RunCommandsIfChanged()
 	}
 }
