@@ -60,7 +60,7 @@ func main() {
 		log.WithField("error", err).Fatal("Failed to configure logging.")
 	}
 
-	cfg, err := loadConfiguration(flags.cfgFile)
+	cfg, err := LoadConfiguration(flags.cfgFile)
 	if err != nil {
 		log.WithField("error", err).Fatal("Failed to load initial configuration.")
 	}
@@ -69,32 +69,32 @@ func main() {
 	if err != nil {
 		log.WithField("error", err).Fatal("Failed to initialize socket.")
 	}
-	listener.Close()
-
-	conn := NewLdapConnection(cfg.LdapConfig)
-	if conn == nil {
-		return
-	}
-	defer conn.Close()
-	for i := range cfg.Certificates {
-		builder := NewCertificateBuilder(conn, &cfg.Certificates[i])
-		err := builder.Build()
-		if err != nil {
-			log.WithField("error", err).Error("Failed to build data for certificate '", cfg.Certificates[i].Path, "'")
-			continue
-		}
-		if builder.MustWrite() {
-			err := builder.WriteFile()
+	defer listener.Close()
+	for {
+		cmd := socketServer(&cfg, listener)
+		if cmd == CMD_QUIT {
+			break
+		} else if cmd == CMD_RELOAD {
+			new_cfg, err := LoadConfiguration(flags.cfgFile)
 			if err != nil {
-				log.WithField("error", err).Error("Failed to write '", cfg.Certificates[i].Path, "'")
-				continue
+				log.WithField("error", err).Error("Failed to load updated configuration.")
+			} else {
+				replace_ok := true
+				if new_cfg.Socket.Path != cfg.Socket.Path {
+					new_listener, err := initSocket(new_cfg.Socket)
+					if err != nil {
+						log.WithField("error", err).Error("Failed to initialize new server socket.")
+						replace_ok = false
+					} else {
+						listener.Close()
+						listener = new_listener
+					}
+				}
+				if replace_ok {
+					cfg = new_cfg
+					log.Info("Configuration reloaded")
+				}
 			}
 		}
-		err = builder.UpdatePrivileges()
-		if err != nil {
-			log.WithField("error", err).Error("Failed to update privileges on '", cfg.Certificates[i].Path, "'")
-			continue
-		}
-		builder.RunCommandsIfChanged()
 	}
 }

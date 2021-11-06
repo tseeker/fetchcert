@@ -284,7 +284,7 @@ func defaultConfiguration() tConfiguration {
 }
 
 // Load and check the configuration file
-func loadConfiguration(file string) (tConfiguration, error) {
+func LoadConfiguration(file string) (tConfiguration, error) {
 	cfg := defaultConfiguration()
 	cfgData, err := ioutil.ReadFile(file)
 	if err != nil {
