@@ -201,13 +201,13 @@ func (b *tCertificateBuilder) appendPem(input string) error {
 // Append the main, end-entity certificate from the LDAP
 func (b *tCertificateBuilder) appendCertificate() error {
 	if b.config.Certificate != "" {
-		dn := b.conn.Config.Structure.BaseDN
+		dn := b.conn.BaseDN()
 		if dn != "" {
 			dn = "," + dn
 		}
 		dn = b.config.Certificate + dn
 		b.logger.WithField("dn", dn).Debug("Adding EE certificate from LDAP")
-		data, err := b.conn.getEndEntityCertificate(dn)
+		data, err := b.conn.GetEndEntityCertificate(dn)
 		if err != nil {
 			return err
 		}
@@ -230,13 +230,13 @@ func (b *tCertificateBuilder) appendCaCertificates() error {
 
 // Append CA certificates based on a list of DNs
 func (b *tCertificateBuilder) appendListedCaCerts() error {
-	bdn := b.conn.Config.Structure.BaseDN
+	bdn := b.conn.BaseDN()
 	if bdn != "" {
 		bdn = "," + bdn
 	}
 	for _, dn := range b.config.CACertificates {
 		b.logger.WithField("dn", dn+bdn).Debug("Adding CA certificate from LDAP")
-		data, _, err := b.conn.getCaCertificate(dn + bdn)
+		data, _, err := b.conn.GetCaCertificate(dn + bdn)
 		if err != nil {
 			return err
 		}
@@ -252,11 +252,11 @@ func (b *tCertificateBuilder) appendListedCaCerts() error {
 func (b *tCertificateBuilder) appendChainedCaCerts() error {
 	nFound := 0
 	dn := b.config.CAChainOf
-	if b.conn.Config.Structure.BaseDN != "" {
-		dn = dn + "," + b.conn.Config.Structure.BaseDN
+	if b.conn.BaseDN() != "" {
+		dn = dn + "," + b.conn.BaseDN()
 	}
 	for {
-		data, nextDn, err := b.conn.getCaCertificate(dn)
+		data, nextDn, err := b.conn.GetCaCertificate(dn)
 		if err != nil {
 			return err
 		}

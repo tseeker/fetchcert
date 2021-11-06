@@ -71,11 +71,11 @@ func main() {
 	}
 	listener.Close()
 
-	conn := getLdapConnection(cfg.LdapConfig)
+	conn := NewLdapConnection(cfg.LdapConfig)
 	if conn == nil {
 		return
 	}
-	defer conn.close()
+	defer conn.Close()
 	for i := range cfg.Certificates {
 		builder := NewCertificateBuilder(conn, &cfg.Certificates[i])
 		err := builder.Build()

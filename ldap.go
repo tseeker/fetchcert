@@ -15,7 +15,7 @@ type (
 	// LDAP connection encapsulation. This includes the connection itself, as well as a logger
 	// that includes fields related to the LDAP server and a copy of the initial configuration.
 	tLdapConn struct {
-		Config  tLdapConfig
+		config  tLdapConfig
 		conn    *ldap.Conn
 		log     *logrus.Entry
 		server  int
@@ -27,7 +27,7 @@ type (
 )
 
 // Try to establish a connection to one of the servers
-func getLdapConnection(cfg tLdapConfig) *tLdapConn {
+func NewLdapConnection(cfg tLdapConfig) *tLdapConn {
 	for i := range cfg.Servers {
 		conn := getLdapServerConnection(cfg, i)
 		if conn != nil {
@@ -35,6 +35,17 @@ func getLdapConnection(cfg tLdapConfig) *tLdapConn {
 		}
 	}
 	return nil
+}
+
+// Close a LDAP connection
+func (conn *tLdapConn) Close() {
+	conn.log.WithField("queries", conn.counter).Debug("Closing LDAP connection")
+	conn.conn.Close()
+}
+
+// Get the base DN
+func (conn *tLdapConn) BaseDN() string {
+	return conn.config.Structure.BaseDN
 }
 
 // Establish a connection to a LDAP server
@@ -101,7 +112,7 @@ func getLdapServerConnection(cfg tLdapConfig, server int) *tLdapConn {
 	}
 	log.Debug("LDAP connection established")
 	return &tLdapConn{
-		Config: cfg,
+		config: cfg,
 		conn:   lc,
 		log:    log,
 		server: server,
@@ -142,15 +153,9 @@ func (conn *tLdapConn) getObject(dn string, attrs []string) (bool, *ldap.Entry) 
 	return true, res.Entries[0]
 }
 
-// Close a LDAP connection
-func (conn *tLdapConn) close() {
-	conn.log.WithField("queries", conn.counter).Debug("Closing LDAP connection")
-	conn.conn.Close()
-}
-
 // Get an end entity's certificate from the LDAP
-func (conn *tLdapConn) getEndEntityCertificate(dn string) ([]byte, error) {
-	eec := conn.Config.Structure.EndEntityCertificate
+func (conn *tLdapConn) GetEndEntityCertificate(dn string) ([]byte, error) {
+	eec := conn.config.Structure.EndEntityCertificate
 	success, entry := conn.getObject(dn, []string{eec})
 	if !success {
 		return nil, fmt.Errorf("Could not read certificate from '%s'", dn)
@@ -173,9 +178,9 @@ func (conn *tLdapConn) getEndEntityCertificate(dn string) ([]byte, error) {
 
 // Get a CA certificate, as well as the value of the chaining field, from
 // the LDAP.
-func (conn *tLdapConn) getCaCertificate(dn string) ([]byte, string, error) {
-	cc := conn.Config.Structure.CACertificate
-	chain := conn.Config.Structure.CAChaining
+func (conn *tLdapConn) GetCaCertificate(dn string) ([]byte, string, error) {
+	cc := conn.config.Structure.CACertificate
+	chain := conn.config.Structure.CAChaining
 	attrs := []string{cc}
 	if chain != "" {
 		attrs = append(attrs, chain)
