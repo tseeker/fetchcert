@@ -64,9 +64,9 @@ type (
 
 	// Certificate file updates configuration.
 	tCertFileUpdateConfig struct {
-		PreCommands  []string  `yaml:"pre_commands"`
-		Handlers     tHandlers `yaml:"handlers"`
-		PostCommands []string  `yaml:"post_commands"`
+		PreCommands  []string `yaml:"pre_commands"`
+		Handlers     []string `yaml:"handlers"`
+		PostCommands []string `yaml:"post_commands"`
 	}
 
 	// Certificate file configuration.
@@ -88,6 +88,7 @@ type (
 	tConfiguration struct {
 		Socket       tSocketConfig            `yaml:"socket"`
 		LdapConfig   tLdapConfig              `yaml:"ldap"`
+		Handlers     tHandlers                `yaml:"handlers"`
 		Certificates []tCertificateFileConfig `yaml:"certificates"`
 	}
 )
