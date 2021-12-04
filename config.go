@@ -230,11 +230,23 @@ func checkFileList(files []string) error {
 	return nil
 }
 
-// Validate a certificate file configuration entry
-func (c *tCertificateFileConfig) Validate() error {
-	if c.Path == "" {
-		return fmt.Errorf("Certificate file entry has no path.")
+// Validate the list of handles
+func (c *tCertFileUpdateConfig) Validate(handlers *tHandlers) error {
+	set := make(map[string]bool)
+	for _, handler := range c.Handlers {
+		if _, exists := (*handlers)[handler]; !exists {
+			return fmt.Errorf("Handler '%s' does not exist.", handler)
+		}
+		if _, exists := set[handler]; exists {
+			return fmt.Errorf("Handler '%s' specified more than once.", handler)
+		}
+		set[handler] = true
 	}
+	return nil
+}
+
+// Validate a certificate file configuration entry
+func (c *tCertificateFileConfig) Validate(handlers *tHandlers) error {
 	if !valid.IsUnixFilePath(c.Path) {
 		return fmt.Errorf("Certificate file path '%s' is invalid.", c.Path)
 	}
@@ -263,6 +275,10 @@ func (c *tCertificateFileConfig) Validate() error {
 	if err != nil {
 		return err
 	}
+	err = c.AfterUpdate.Validate(handlers)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -276,10 +292,13 @@ func (c *tConfiguration) Validate() error {
 	if err != nil {
 		return err
 	}
-	for _, cfc := range c.Certificates {
-		err = cfc.Validate()
+	for idx, cfc := range c.Certificates {
+		if cfc.Path == "" {
+			return fmt.Errorf("Certificate file entry #%d has no path.", idx+1)
+		}
+		err = cfc.Validate(&c.Handlers)
 		if err != nil {
-			return err
+			return fmt.Errorf("Certificate file %s (#%d): %s", cfc.Path, idx+1, err)
 		}
 	}
 	return nil
