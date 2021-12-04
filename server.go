@@ -12,20 +12,32 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type TCommandType int
+type tCommandType int
 
 const (
-	CMD_IGNORE TCommandType = iota
+	CMD_IGNORE tCommandType = iota
 	CMD_QUIT
 	CMD_RELOAD
 	CMD_UPDATE
 )
 
-type TCommand struct {
-	CommandType TCommandType
-	Force       bool
-	Selector    string
-}
+type (
+	tCommand struct {
+		CommandType tCommandType
+		Force       bool
+		Selector    string
+	}
+
+	// The state of the main server
+	TServerState struct {
+		// The path to the configuration file
+		cfgFile string
+		// The configuration
+		config tConfiguration
+		// The UNIX socket listener
+		listener net.Listener
+	}
+)
 
 func configureSocket(cfg tSocketConfig) error {
 	if cfg.Group != "" {
@@ -67,7 +79,7 @@ func initSocket(cfg tSocketConfig) (net.Listener, error) {
 	return listener, nil
 }
 
-func socketServer(cfg *tConfiguration, listener net.Listener) TCommandType {
+func socketServer(cfg *tConfiguration, listener net.Listener) tCommandType {
 	for {
 		fd, err := listener.Accept()
 		if err != nil {
@@ -80,7 +92,7 @@ func socketServer(cfg *tConfiguration, listener net.Listener) TCommandType {
 	}
 }
 
-func executeFromSocket(cfg *tConfiguration, conn net.Conn) TCommandType {
+func executeFromSocket(cfg *tConfiguration, conn net.Conn) tCommandType {
 	defer conn.Close()
 	log.Debug("Received connection")
 
@@ -114,7 +126,7 @@ func executeFromSocket(cfg *tConfiguration, conn net.Conn) TCommandType {
 	return command.CommandType
 }
 
-func parseCommand(n int, buf []byte) *TCommand {
+func parseCommand(n int, buf []byte) *tCommand {
 	if n == 512 {
 		log.Warn("Too much data received")
 		return nil
@@ -125,12 +137,12 @@ func parseCommand(n int, buf []byte) *TCommand {
 	}
 	if n == 1 {
 		if buf[0] == 'Q' {
-			return &TCommand{CommandType: CMD_QUIT}
+			return &tCommand{CommandType: CMD_QUIT}
 		} else if buf[0] == 'R' {
-			return &TCommand{CommandType: CMD_RELOAD}
+			return &tCommand{CommandType: CMD_RELOAD}
 		}
 	} else if n > 2 && buf[0] == 'U' {
-		res := &TCommand{CommandType: CMD_UPDATE}
+		res := &tCommand{CommandType: CMD_UPDATE}
 		if buf[1] == '!' {
 			res.Force = true
 		}
@@ -141,4 +153,59 @@ func parseCommand(n int, buf []byte) *TCommand {
 	}
 	log.Warn("Invalid command received")
 	return nil
+}
+
+// Initialize server state
+func InitServer(cfgFile string, config tConfiguration) TServerState {
+	ss := TServerState{
+		cfgFile: cfgFile,
+		config:  config,
+	}
+	listener, err := initSocket(ss.config.Socket)
+	if err != nil {
+		log.WithField("error", err).Fatal("Failed to initialize socket.")
+	}
+	ss.listener = listener
+	return ss
+}
+
+// Destroy the server
+func (state *TServerState) Destroy() {
+	state.listener.Close()
+}
+
+// Server main loop. Processes commands received from connections. Certificate
+// update requests are processed directly, but Quit/Reload commands are
+// propagated back to this loop and handled here.
+func (state *TServerState) MainLoop() {
+	for {
+		cmd := socketServer(&state.config, state.listener)
+		if cmd == CMD_QUIT {
+			break
+		} else if cmd != CMD_RELOAD {
+			continue
+		}
+
+		new_cfg, err := LoadConfiguration(state.cfgFile)
+		if err != nil {
+			log.WithField("error", err).Error("Failed to load updated configuration.")
+			continue
+		}
+
+		replace_ok := true
+		if new_cfg.Socket.Path != state.config.Socket.Path {
+			new_listener, err := initSocket(new_cfg.Socket)
+			if err != nil {
+				log.WithField("error", err).Error("Failed to initialize new server socket.")
+				replace_ok = false
+			} else {
+				state.listener.Close()
+				state.listener = new_listener
+			}
+		}
+		if replace_ok {
+			state.config = new_cfg
+			log.Info("Configuration reloaded")
+		}
+	}
 }

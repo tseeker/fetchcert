@@ -1,7 +1,6 @@
 package main
 
 import (
-	"net"
 	"os"
 
 	"github.com/karrick/golf"
@@ -16,6 +15,11 @@ type (
 		// then quits), client (connects to the server and requests an
 		// update) or server (runs the server in the foreground).
 		runMode string
+		// When running in client mode, if this is set to a string, it
+		// will be interpreted as a command to send to the server.
+		// Supported commands are 'Q' (quit) and 'R' (reload
+		// configuration)
+		command string
 		// The selector to use when running the updates. Only meaningful
 		// if running in client or standalone mode.
 		selector string
@@ -33,16 +37,6 @@ type (
 		// Send logs to syslog.
 		logSyslog bool
 	}
-
-	// The state of the main server
-	tServerState struct {
-		// The path to the configuration file
-		cfgFile string
-		// The configuration
-		config tConfiguration
-		// The UNIX socket listener
-		listener net.Listener
-	}
 )
 
 // Parse command line options.
@@ -52,6 +46,10 @@ func parseCommandLine() tCliFlags {
 
 	golf.StringVarP(&flags.cfgFile, 'c', "config", "/etc/fetch-certificates.yml",
 		"Path to the configuration file.")
+	golf.StringVarP(&flags.command, 'C', "command", "",
+		"Send a command to the server instead of requesting an "+
+			"update. Only meaningful in client mode. Command may be "+
+			"Q (quit) or R (reload configuration).")
 	golf.BoolVarP(&flags.force, 'f', "force", false,
 		"Force update of selected certificates. Only meaningful in "+
 			"client or standalone mode.")
@@ -81,65 +79,6 @@ func parseCommandLine() tCliFlags {
 	return flags
 }
 
-// Initialize server state
-func initServer(cfgFile string) tServerState {
-	ss := tServerState{
-		cfgFile: cfgFile,
-	}
-	cfg, err := LoadConfiguration(ss.cfgFile)
-	if err != nil {
-		log.WithField("error", err).Fatal("Failed to load initial configuration.")
-	}
-	ss.config = cfg
-	listener, err := initSocket(cfg.Socket)
-	if err != nil {
-		log.WithField("error", err).Fatal("Failed to initialize socket.")
-	}
-	ss.listener = listener
-	return ss
-}
-
-// Destroy the server
-func (state *tServerState) destroy() {
-	state.listener.Close()
-}
-
-// Server main loop. Processes commands received from connections. Certificate
-// update requests are processed directly, but Quit/Reload commands are
-// propagated back to this loop and handled here.
-func (state *tServerState) mainLoop() {
-	for {
-		cmd := socketServer(&state.config, state.listener)
-		if cmd == CMD_QUIT {
-			break
-		} else if cmd != CMD_RELOAD {
-			continue
-		}
-
-		new_cfg, err := LoadConfiguration(state.cfgFile)
-		if err != nil {
-			log.WithField("error", err).Error("Failed to load updated configuration.")
-			continue
-		}
-
-		replace_ok := true
-		if new_cfg.Socket.Path != state.config.Socket.Path {
-			new_listener, err := initSocket(new_cfg.Socket)
-			if err != nil {
-				log.WithField("error", err).Error("Failed to initialize new server socket.")
-				replace_ok = false
-			} else {
-				state.listener.Close()
-				state.listener = new_listener
-			}
-		}
-		if replace_ok {
-			state.config = new_cfg
-			log.Info("Configuration reloaded")
-		}
-	}
-}
-
 func main() {
 	flags := parseCommandLine()
 	err := configureLogging(flags)
@@ -147,26 +86,40 @@ func main() {
 		log.WithField("error", err).Fatal("Failed to configure logging.")
 	}
 
-	if flags.runMode == "server" {
-		server := initServer(flags.cfgFile)
-		defer server.destroy()
-		server.mainLoop()
-		return
-	}
-
 	cfg, err := LoadConfiguration(flags.cfgFile)
 	if err != nil {
 		log.WithField("error", err).Fatal("Failed to load initial configuration.")
 	}
-	if flags.runMode == "standalone" {
+
+	if flags.runMode == "server" {
+		server := InitServer(flags.cfgFile, cfg)
+		defer server.Destroy()
+		server.MainLoop()
+
+	} else if flags.runMode == "standalone" {
 		result := executeUpdate(&cfg, flags.selector, flags.force)
 		if result {
 			log.Debug("Update successful")
 		} else {
 			log.Fatal("Update failed")
 		}
+
 	} else if flags.runMode == "client" {
-		panic("CLIENT MODE NOT IMPLEMENTED") // FIXME
+		client := InitClient(cfg)
+		if flags.command == "Q" || flags.command == "R" {
+			client.SendCommand(flags.command)
+		} else if flags.command != "" {
+			log.WithField("command", flags.command).Fatal(
+				"Unknown server command.")
+		} else {
+			result := client.RequestUpdate(flags.selector, flags.force)
+			if result {
+				log.Debug("Update successful")
+			} else {
+				log.Fatal("Update failed")
+			}
+		}
+
 	} else {
 		log.WithField("mode", flags.runMode).Fatal("Unknown execution mode.")
 	}
