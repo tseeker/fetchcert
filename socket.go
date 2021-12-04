@@ -100,7 +100,7 @@ func executeFromSocket(cfg *tConfiguration, conn net.Conn) TCommandType {
 			"force":    command.Force,
 			"selector": command.Selector,
 		}).Info("Update request received")
-		success := executeUpdate(cfg, command)
+		success := executeUpdate(cfg, command.Selector, command.Force)
 		conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
 		var bval byte
 		if success {
@@ -141,46 +141,4 @@ func parseCommand(n int, buf []byte) *TCommand {
 	}
 	log.Warn("Invalid command received")
 	return nil
-}
-
-func executeUpdate(cfg *tConfiguration, cmd *TCommand) bool {
-	conn := NewLdapConnection(cfg.LdapConfig)
-	if conn == nil {
-		return false
-	}
-	defer conn.Close()
-
-	had_errors := false
-	for i := range cfg.Certificates {
-		builder := NewCertificateBuilder(conn, &cfg.Certificates[i], cmd)
-		err := builder.Build()
-		if err != nil {
-			log.WithField("error", err).Error("Failed to build data for certificate '", cfg.Certificates[i].Path, "'")
-			had_errors = true
-			continue
-		}
-		if !builder.SelectorMatches() {
-			continue
-		}
-		if builder.MustWrite() {
-			err := builder.WriteFile()
-			if err != nil {
-				log.WithField("error", err).Error("Failed to write '", cfg.Certificates[i].Path, "'")
-				had_errors = true
-				continue
-			}
-		}
-		err = builder.UpdatePrivileges()
-		if err != nil {
-			log.WithField("error", err).Error("Failed to update privileges on '", cfg.Certificates[i].Path, "'")
-			had_errors = true
-			continue
-		}
-		err = builder.RunCommandsIfChanged()
-		if err != nil {
-			log.WithField("error", err).Error("Failed to run commands after update of '", cfg.Certificates[i].Path, "'")
-			had_errors = true
-		}
-	}
-	return !had_errors
 }
