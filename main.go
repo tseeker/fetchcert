@@ -12,6 +12,16 @@ type (
 	tCliFlags struct {
 		// The path to the configuration file.
 		cfgFile string
+		// Mode to run as. May be either standalone (executes an update
+		// then quits), client (connects to the server and requests an
+		// update) or server (runs the server in the foreground).
+		runMode string
+		// The selector to use when running the updates. Only meaningful
+		// if running in client or standalone mode.
+		selector string
+		// Whether updates should be forced. Only meaningful if running
+		// in client or standalone mode.
+		force bool
 		// Quiet mode. Will disable logging to stderr.
 		quiet bool
 		// The log level.
@@ -40,13 +50,28 @@ func parseCommandLine() tCliFlags {
 	var help bool
 	flags := tCliFlags{}
 
-	golf.StringVarP(&flags.cfgFile, 'c', "config", "/etc/fetch-certificates.yml", "Path to the configuration file.")
-	golf.StringVarP(&flags.logFile, 'f', "log-file", "", "Path to the log file.")
-	golf.StringVarP(&flags.logGraylog, 'g', "log-graylog", "", "Log to Graylog server (format: <host>:<port>).")
-	golf.BoolVarP(&help, 'h', "help", false, "Display command line help and exit.")
-	golf.StringVarP(&flags.logLevel, 'L', "log-level", "info", "Log level to use.")
-	golf.BoolVarP(&flags.quiet, 'q', "quiet", false, "Quiet mode; prevents logging to stderr.")
-	golf.BoolVarP(&flags.logSyslog, 's', "syslog", false, "Log to local syslog.")
+	golf.StringVarP(&flags.cfgFile, 'c', "config", "/etc/fetch-certificates.yml",
+		"Path to the configuration file.")
+	golf.BoolVarP(&flags.force, 'f', "force", false,
+		"Force update of selected certificates. Only meaningful in "+
+			"client or standalone mode.")
+	golf.StringVarP(&flags.logFile, 'F', "log-file", "",
+		"Path to the log file.")
+	golf.StringVarP(&flags.logGraylog, 'g', "log-graylog", "",
+		"Log to Graylog server (format: <host>:<port>).")
+	golf.BoolVarP(&help, 'h', "help", false,
+		"Display command line help and exit.")
+	golf.StringVarP(&flags.logLevel, 'l', "log-level", "info",
+		"Log level to use.")
+	golf.StringVarP(&flags.runMode, 'm', "mode", "standalone",
+		"Mode of execution (client/server/[standalone])")
+	golf.BoolVarP(&flags.quiet, 'q', "quiet", false,
+		"Quiet mode; prevents logging to stderr.")
+	golf.BoolVarP(&flags.logSyslog, 's', "syslog", false,
+		"Log to local syslog.")
+	golf.StringVarP(&flags.selector, 'u', "update", "*",
+		"LDAP DN of the certificate to select, or '*' to update all "+
+			"certificates.")
 
 	golf.Parse()
 	if help {
@@ -116,21 +141,33 @@ func (state *tServerState) mainLoop() {
 }
 
 func main() {
-	// This utility will load its configuration then start listening on
-	// a UNIX socket. It will be handle messages that can :
-	// - stop the program,
-	// - update the configuration,
-	// - check a single entry for replacement,
-	// - check all entries for replacement.
-	// Both check commands include a flag that will force replacement.
-
 	flags := parseCommandLine()
 	err := configureLogging(flags)
 	if err != nil {
 		log.WithField("error", err).Fatal("Failed to configure logging.")
 	}
 
-	server := initServer(flags.cfgFile)
-	defer server.destroy()
-	server.mainLoop()
+	if flags.runMode == "server" {
+		server := initServer(flags.cfgFile)
+		defer server.destroy()
+		server.mainLoop()
+		return
+	}
+
+	cfg, err := LoadConfiguration(flags.cfgFile)
+	if err != nil {
+		log.WithField("error", err).Fatal("Failed to load initial configuration.")
+	}
+	if flags.runMode == "standalone" {
+		result := executeUpdate(&cfg, flags.selector, flags.force)
+		if result {
+			log.Debug("Update successful")
+		} else {
+			log.Fatal("Update failed")
+		}
+	} else if flags.runMode == "client" {
+		panic("CLIENT MODE NOT IMPLEMENTED") // FIXME
+	} else {
+		log.WithField("mode", flags.runMode).Fatal("Unknown execution mode.")
+	}
 }
