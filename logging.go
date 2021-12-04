@@ -46,7 +46,7 @@ func configureLogFile(path string) {
 }
 
 // Configure the logging library based on the various command line flags.
-func configureLogging(flags cliFlags) error {
+func configureLogging(flags tCliFlags) error {
 	log = logrus.NewEntry(logrus.New())
 	log.Logger.SetFormatter(&logrus.TextFormatter{
 		DisableColors: true,

@@ -8,7 +8,7 @@ import (
 
 type (
 	// This structure contains all values that may be set from the command line.
-	cliFlags struct {
+	tCliFlags struct {
 		// The path to the configuration file.
 		cfgFile string
 		// Quiet mode. Will disable logging to stderr.
@@ -25,9 +25,9 @@ type (
 )
 
 // Parse command line options.
-func parseCommandLine() cliFlags {
+func parseCommandLine() tCliFlags {
 	var help bool
-	flags := cliFlags{}
+	flags := tCliFlags{}
 
 	golf.StringVarP(&flags.cfgFile, 'c', "config", "/etc/fetch-certificates.yml", "Path to the configuration file.")
 	golf.StringVarP(&flags.logFile, 'f', "log-file", "", "Path to the log file.")
