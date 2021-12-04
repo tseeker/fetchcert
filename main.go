@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"os"
 
 	"github.com/karrick/golf"
@@ -21,6 +22,16 @@ type (
 		logGraylog string
 		// Send logs to syslog.
 		logSyslog bool
+	}
+
+	// The state of the main server
+	tServerState struct {
+		// The path to the configuration file
+		cfgFile string
+		// The configuration
+		config tConfiguration
+		// The UNIX socket listener
+		listener net.Listener
 	}
 )
 
@@ -45,6 +56,65 @@ func parseCommandLine() tCliFlags {
 	return flags
 }
 
+// Initialize server state
+func initServer(cfgFile string) tServerState {
+	ss := tServerState{
+		cfgFile: cfgFile,
+	}
+	cfg, err := LoadConfiguration(ss.cfgFile)
+	if err != nil {
+		log.WithField("error", err).Fatal("Failed to load initial configuration.")
+	}
+	ss.config = cfg
+	listener, err := initSocket(cfg.Socket)
+	if err != nil {
+		log.WithField("error", err).Fatal("Failed to initialize socket.")
+	}
+	ss.listener = listener
+	return ss
+}
+
+// Destroy the server
+func (state *tServerState) destroy() {
+	state.listener.Close()
+}
+
+// Server main loop. Processes commands received from connections. Certificate
+// update requests are processed directly, but Quit/Reload commands are
+// propagated back to this loop and handled here.
+func (state *tServerState) mainLoop() {
+	for {
+		cmd := socketServer(&state.config, state.listener)
+		if cmd == CMD_QUIT {
+			break
+		} else if cmd != CMD_RELOAD {
+			continue
+		}
+
+		new_cfg, err := LoadConfiguration(state.cfgFile)
+		if err != nil {
+			log.WithField("error", err).Error("Failed to load updated configuration.")
+			continue
+		}
+
+		replace_ok := true
+		if new_cfg.Socket.Path != state.config.Socket.Path {
+			new_listener, err := initSocket(new_cfg.Socket)
+			if err != nil {
+				log.WithField("error", err).Error("Failed to initialize new server socket.")
+				replace_ok = false
+			} else {
+				state.listener.Close()
+				state.listener = new_listener
+			}
+		}
+		if replace_ok {
+			state.config = new_cfg
+			log.Info("Configuration reloaded")
+		}
+	}
+}
+
 func main() {
 	// This utility will load its configuration then start listening on
 	// a UNIX socket. It will be handle messages that can :
@@ -60,41 +130,7 @@ func main() {
 		log.WithField("error", err).Fatal("Failed to configure logging.")
 	}
 
-	cfg, err := LoadConfiguration(flags.cfgFile)
-	if err != nil {
-		log.WithField("error", err).Fatal("Failed to load initial configuration.")
-	}
-
-	listener, err := initSocket(cfg.Socket)
-	if err != nil {
-		log.WithField("error", err).Fatal("Failed to initialize socket.")
-	}
-	defer listener.Close()
-	for {
-		cmd := socketServer(&cfg, listener)
-		if cmd == CMD_QUIT {
-			break
-		} else if cmd == CMD_RELOAD {
-			new_cfg, err := LoadConfiguration(flags.cfgFile)
-			if err != nil {
-				log.WithField("error", err).Error("Failed to load updated configuration.")
-			} else {
-				replace_ok := true
-				if new_cfg.Socket.Path != cfg.Socket.Path {
-					new_listener, err := initSocket(new_cfg.Socket)
-					if err != nil {
-						log.WithField("error", err).Error("Failed to initialize new server socket.")
-						replace_ok = false
-					} else {
-						listener.Close()
-						listener = new_listener
-					}
-				}
-				if replace_ok {
-					cfg = new_cfg
-					log.Info("Configuration reloaded")
-				}
-			}
-		}
-	}
+	server := initServer(flags.cfgFile)
+	defer server.destroy()
+	server.mainLoop()
 }
