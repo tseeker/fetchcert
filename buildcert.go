@@ -206,12 +206,12 @@ func (b *tCertificateBuilder) RunCommandsIfChanged() error {
 		log.Debug("Not running commands")
 		return nil
 	}
-	for i := range b.config.AfterUpdate {
+	for i := range b.config.AfterUpdate.PreCommands {
 		err := b.RunCommand(i)
 		if err != nil {
 			return fmt.Errorf(
 				"Failed while executing command '%s': %w",
-				b.config.AfterUpdate[i],
+				b.config.AfterUpdate.PreCommands[i],
 				err,
 			)
 		}
@@ -224,9 +224,9 @@ func (b *tCertificateBuilder) RunCommand(pos int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	log := b.logger.WithField("command", b.config.AfterUpdate[pos])
+	log := b.logger.WithField("command", b.config.AfterUpdate.PreCommands[pos])
 	log.Debug("Executing command")
-	cmd := exec.CommandContext(ctx, "sh", "-c", b.config.AfterUpdate[pos])
+	cmd := exec.CommandContext(ctx, "sh", "-c", b.config.AfterUpdate.PreCommands[pos])
 	output, err := cmd.CombinedOutput()
 	if len(output) != 0 {
 		if utf8.Valid(output) {

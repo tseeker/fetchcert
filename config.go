@@ -59,19 +59,29 @@ type (
 		Servers   []tLdapServerConfig   `yaml:"servers"`
 	}
 
+	// Handlers. Each handler has a name and contains a list of commands.
+	tHandlers map[string][]string
+
+	// Certificate file updates configuration.
+	tCertFileUpdateConfig struct {
+		PreCommands  []string  `yaml:"pre_commands"`
+		Handlers     tHandlers `yaml:"handlers"`
+		PostCommands []string  `yaml:"post_commands"`
+	}
+
 	// Certificate file configuration.
 	tCertificateFileConfig struct {
-		Path           string      `yaml:"path"`
-		Mode           os.FileMode `yaml:"mode"`
-		Owner          string      `yaml:"owner"`
-		Group          string      `yaml:"group"`
-		PrependFiles   []string    `yaml:"prepend_files"`
-		Certificate    string      `yaml:"certificate"`
-		CACertificates []string    `yaml:"ca"`
-		CAChainOf      string      `yaml:"ca_chain_of"`
-		Reverse        bool        `yaml:"reverse"`
-		AppendFiles    []string    `yaml:"append_files"`
-		AfterUpdate    []string    `yaml:"after_update"`
+		Path           string                `yaml:"path"`
+		Mode           os.FileMode           `yaml:"mode"`
+		Owner          string                `yaml:"owner"`
+		Group          string                `yaml:"group"`
+		PrependFiles   []string              `yaml:"prepend_files"`
+		Certificate    string                `yaml:"certificate"`
+		CACertificates []string              `yaml:"ca"`
+		CAChainOf      string                `yaml:"ca_chain_of"`
+		Reverse        bool                  `yaml:"reverse"`
+		AppendFiles    []string              `yaml:"append_files"`
+		AfterUpdate    tCertFileUpdateConfig `yaml:"after_update"`
 	}
 
 	// Main configuration.

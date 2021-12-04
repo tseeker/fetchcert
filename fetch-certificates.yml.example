@@ -53,6 +53,15 @@ ldap:
     - host: ldap1.example.org
     - host: ldap2.example.org
 
+# Handlers. Certificate updates can specify that a handler must be executed
+# if the PEM file is replaced. A handler will only be executed once for all
+# triggered updates. Each handler is a list of commands. When a handler runs,
+# the first command that fails will stop the execution.
+handlers:
+  apache:
+    - /usr/sbin/apache2ctl configtest
+    - /usr/sbin/apache2ctl graceful
+
 # Certificates that must be updated
 certificates:
 
@@ -89,7 +98,15 @@ certificates:
     # A list of files to append to the output.
     append_files:
       - /some/other/file.pem
-    # A list of commands that will be executed when the file is replaced.
-    # If one of the commands fails, execution will stop.
+    # Define what must be done after an update.
     after_update:
-      - apache2ctl graceful
+      # Commands to execute before handlers are run. The order of the commands
+      # is respected. If a command fails to run, execution stops.
+      pre_commands: []
+      # Handlers to trigger. Handlers will still be executed if a pre-command
+      # had failed but they were triggered by more than one update. Execution
+      # order is arbitrary.
+      handlers:
+        - apache
+      # Commands to execute after handlers are run.
+      post_commands: []
