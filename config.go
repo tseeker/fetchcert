@@ -61,9 +61,12 @@ type (
 
 	// Handlers. Each handler has a name and contains a list of commands.
 	tHandlers map[string][]string
+	// Handler timeouts.
+	tHandlerTimeouts map[string]int
 
 	// Certificate file updates configuration.
 	tCertFileUpdateConfig struct {
+		CmdTimeout   *int     `yaml:"command_timeout"`
 		PreCommands  []string `yaml:"pre_commands"`
 		Handlers     []string `yaml:"handlers"`
 		PostCommands []string `yaml:"post_commands"`
@@ -86,10 +89,12 @@ type (
 
 	// Main configuration.
 	tConfiguration struct {
-		Socket       *tSocketConfig           `yaml:"socket"`
-		LdapConfig   tLdapConfig              `yaml:"ldap"`
-		Handlers     tHandlers                `yaml:"handlers"`
-		Certificates []tCertificateFileConfig `yaml:"certificates"`
+		CmdTimeout      int                      `yaml:"command_timeout"`
+		Socket          *tSocketConfig           `yaml:"socket"`
+		LdapConfig      tLdapConfig              `yaml:"ldap"`
+		Handlers        tHandlers                `yaml:"handlers"`
+		HandlerTimeouts tHandlerTimeouts         `yaml:"handler_timeouts"`
+		Certificates    []tCertificateFileConfig `yaml:"certificates"`
 	}
 )
 
@@ -235,7 +240,7 @@ func checkFileList(files []string) error {
 	return nil
 }
 
-// Validate the list of handles
+// Validate the list of handlers and the timeout.
 func (c *tCertFileUpdateConfig) Validate(handlers *tHandlers) error {
 	set := make(map[string]bool)
 	for _, handler := range c.Handlers {
@@ -246,6 +251,9 @@ func (c *tCertFileUpdateConfig) Validate(handlers *tHandlers) error {
 			return fmt.Errorf("Handler '%s' specified more than once.", handler)
 		}
 		set[handler] = true
+	}
+	if c.CmdTimeout != nil && *c.CmdTimeout <= 0 {
+		return fmt.Errorf("Command timeout must be >0.")
 	}
 	return nil
 }
@@ -289,6 +297,9 @@ func (c *tCertificateFileConfig) Validate(handlers *tHandlers) error {
 
 // Validate the configuration
 func (c *tConfiguration) Validate() error {
+	if c.CmdTimeout <= 0 {
+		return fmt.Errorf("Default command timeout must be >0.")
+	}
 	if c.Socket != nil {
 		err := c.Socket.Validate()
 		if err != nil {
@@ -298,6 +309,14 @@ func (c *tConfiguration) Validate() error {
 	err := c.LdapConfig.Validate()
 	if err != nil {
 		return err
+	}
+	for hdl, timeout := range c.HandlerTimeouts {
+		if _, exists := c.Handlers[hdl]; !exists {
+			return fmt.Errorf("Can't set timeout for unknown handler %s", hdl)
+		}
+		if timeout <= 0 {
+			return fmt.Errorf("Command timeout for handler %s must be >0.", hdl)
+		}
 	}
 	for idx, cfc := range c.Certificates {
 		if cfc.Path == "" {
@@ -314,6 +333,7 @@ func (c *tConfiguration) Validate() error {
 // Create a configuration data structure containing default values.
 func defaultConfiguration() tConfiguration {
 	cfg := tConfiguration{}
+	cfg.CmdTimeout = 5
 	cfg.LdapConfig.Defaults.TLS = "no"
 	cfg.LdapConfig.Structure.CAChaining = "seeAlso"
 	return cfg

@@ -122,7 +122,11 @@ func (u *tUpdate) runPreCommands() {
 
 		l := log.WithField("file", u.config.Certificates[i].Path)
 		l.Info("Running pre-commands")
-		err := u.runCommands(commands, l)
+		timeout := u.config.CmdTimeout
+		if u.config.Certificates[i].AfterUpdate.CmdTimeout != nil {
+			timeout = *u.config.Certificates[i].AfterUpdate.CmdTimeout
+		}
+		err := u.runCommands(timeout, commands, l)
 		if err == nil {
 			continue
 		}
@@ -159,7 +163,11 @@ func (u *tUpdate) runHandlers(handlers []string) map[string]bool {
 	for _, handler := range handlers {
 		l := log.WithField("handler", handler)
 		l.Info("Running handler")
-		err := u.runCommands(u.config.Handlers[handler], l)
+		timeout := u.config.CmdTimeout
+		if ht, exists := u.config.HandlerTimeouts[handler]; exists {
+			timeout = ht
+		}
+		err := u.runCommands(timeout, u.config.Handlers[handler], l)
 		if err == nil {
 			continue
 		}
@@ -204,7 +212,11 @@ func (u *tUpdate) runPostCommands() {
 
 		l := log.WithField("file", u.config.Certificates[i].Path)
 		l.Info("Running post-commands")
-		err := u.runCommands(commands, l)
+		timeout := u.config.CmdTimeout
+		if u.config.Certificates[i].AfterUpdate.CmdTimeout != nil {
+			timeout = *u.config.Certificates[i].AfterUpdate.CmdTimeout
+		}
+		err := u.runCommands(timeout, commands, l)
 		if err == nil {
 			continue
 		}
@@ -215,10 +227,10 @@ func (u *tUpdate) runPostCommands() {
 	}
 }
 
-// Run a list of commands
-func (u *tUpdate) runCommands(commands []string, log *logrus.Entry) error {
+// Run a list of commands.
+func (u *tUpdate) runCommands(timeout int, commands []string, log *logrus.Entry) error {
 	for i := range commands {
-		err := u.runCommand(commands[i], log)
+		err := u.runCommand(timeout, commands[i], log)
 		if err != nil {
 			return fmt.Errorf(
 				"Failed while executing command '%s': %w",
@@ -230,11 +242,14 @@ func (u *tUpdate) runCommands(commands []string, log *logrus.Entry) error {
 }
 
 // Run a command through the `sh` shell.
-func (b *tUpdate) runCommand(command string, log *logrus.Entry) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func (b *tUpdate) runCommand(timeout int, command string, log *logrus.Entry) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	log = log.WithField("command", command)
+	log = log.WithFields(logrus.Fields{
+		"command": command,
+		"timeout": timeout,
+	})
 	log.Debug("Executing command")
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	output, err := cmd.CombinedOutput()

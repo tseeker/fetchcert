@@ -1,6 +1,9 @@
 # fetchcert configuration example / documentation
 # ===============================================
 
+# Default command execution timeout (seconds). 5 seconds is the default.
+command_timeout: 5
+
 # The UNIX socket the main program listens on. May be omitted if the program
 # is intended to run in standalone mode only.
 socket:
@@ -63,6 +66,11 @@ handlers:
     - /usr/sbin/apache2ctl configtest
     - /usr/sbin/apache2ctl graceful
 
+# Handler command timeouts. If this section is missing, or if no entry is
+# present for a handler, the default command timeout will be used.
+handler_timeouts:
+  apache: 1
+
 # Certificates that must be updated
 certificates:
 
@@ -101,6 +109,10 @@ certificates:
       - /some/other/file.pem
     # Define what must be done after an update.
     after_update:
+      # Command execution timeout for pre- and post-commands. If this entry is
+      # missing, the default from command_timeout above will be used. This does
+      # not affect handlers.
+      command_timeout: 1
       # Commands to execute before handlers are run. The order of the commands
       # is respected. If a command fails to run, execution stops.
       pre_commands: []
