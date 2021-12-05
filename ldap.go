@@ -62,8 +62,9 @@ func getLdapServerConnection(cfg tLdapConfig, server int) *tLdapConn {
 	})
 	log.Trace("Establishing LDAP connection")
 
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: scfg.TLSNoVerify,
+	tlsConfig := &tls.Config{}
+	if scfg.TLSNoVerify != nil {
+		tlsConfig.InsecureSkipVerify = *scfg.TLSNoVerify
 	}
 	if scfg.TLS != "no" && scfg.CaChain != "" {
 		log := log.WithField("cachain", scfg.CaChain)

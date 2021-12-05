@@ -30,7 +30,7 @@ type (
 	tLdapConnectionConfig struct {
 		Port         uint16 `yaml:"port"`
 		TLS          string `yaml:"tls"`
-		TLSNoVerify  bool   `yaml:"tls_skip_verify"`
+		TLSNoVerify  *bool  `yaml:"tls_skip_verify"`
 		CaChain      string `yaml:"ca_chain"`
 		BindUser     string `yaml:"bind_user"`
 		BindPassword string `yaml:"bind_password"`
@@ -168,7 +168,9 @@ func (c *tLdapServerConfig) ApplyDefaults(dft tLdapConnectionConfig) {
 	if c.TLS == "" {
 		c.TLS = dft.TLS
 	}
-	// FIXME: I have no clue how I should handle TLSNoVerify
+	if c.TLSNoVerify == nil {
+		c.TLSNoVerify = dft.TLSNoVerify
+	}
 	if c.CaChain == "" {
 		c.CaChain = dft.CaChain
 	}
