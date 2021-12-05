@@ -20,10 +20,10 @@ ldap:
     base_dn: ou=certificates,dc=example,dc=org
     # Name of the attribute that will contain an end entity certificate
     # in the LDAP objects.
-    end_entity: userCertificate
+    end_entity: userCertificate;binary
     # Name of the attribute that will contain a CA certificate in the LDAP
     # objects.
-    ca_certificate: caCertificate
+    ca_certificate: cACertificate;binary
     # Attribute that will contain the DN of the next certificate in the chain.
     ca_chaining: seeAlso
 
