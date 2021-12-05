@@ -1,7 +1,8 @@
 # fetchcert configuration example / documentation
 # ===============================================
 
-# The UNIX socket the main program listens on.
+# The UNIX socket the main program listens on. May be omitted if the program
+# is intended to run in standalone mode only.
 socket:
   # The path to the UNIX socket.
   path: /tmp/socket
