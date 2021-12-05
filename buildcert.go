@@ -152,8 +152,9 @@ func (b *tCertificateBuilder) WriteFile() error {
 
 // Update the file's owner and group
 func (b *tCertificateBuilder) UpdatePrivileges() error {
-	update_mode := !b.changed && b.existing.mode != b.Config.FileMode()
+	update_mode := b.existing != nil && b.existing.mode != b.Config.FileMode()
 	if update_mode {
+		log.WithField("mode", b.Config.FileMode).Info("Updating file mode")
 		err := os.Chmod(b.Config.Path, b.Config.FileMode())
 		if err != nil {
 			return err
@@ -193,7 +194,9 @@ func (b *tCertificateBuilder) UpdatePrivileges() error {
 		return err
 	} else {
 		b.changed = b.changed || update_mode
-		log.Debug("No update to privileges")
+		if !update_mode {
+			log.Debug("No update to privileges")
+		}
 		return nil
 	}
 }
