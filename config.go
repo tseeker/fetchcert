@@ -261,7 +261,7 @@ func (c *tCertFileUpdateConfig) Validate(handlers *tHandlers) error {
 // Return the mode of a certificate file
 func (c *tCertificateFileConfig) FileMode() os.FileMode {
 	if c.Mode == nil {
-		return 0640
+		return 0644
 	} else {
 		return *c.Mode
 	}

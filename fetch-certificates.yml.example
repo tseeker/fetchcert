@@ -76,7 +76,8 @@ certificates:
 
     # Path to the file to generate
   - path: /etc/ssl/private/cert1.pem
-    # Access mode, owner and group for the file. May be omitted.
+    # Access mode, owner and group for the file. May be omitted. The mode
+    # will default to 0644 if unspecified.
     mode: 0640
     owner: root
     group: somegroup
