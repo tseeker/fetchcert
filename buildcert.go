@@ -143,7 +143,7 @@ func (b *tCertificateBuilder) MustWrite(force bool) bool {
 // Write the file's data
 func (b *tCertificateBuilder) WriteFile() error {
 	log.WithField("file", b.Config.Path).Info("Writing certificate data to file")
-	err := ioutil.WriteFile(b.Config.Path, b.text, b.Config.Mode)
+	err := ioutil.WriteFile(b.Config.Path, b.text, b.Config.FileMode())
 	if err == nil {
 		b.changed = true
 	}
@@ -152,9 +152,9 @@ func (b *tCertificateBuilder) WriteFile() error {
 
 // Update the file's owner and group
 func (b *tCertificateBuilder) UpdatePrivileges() error {
-	update_mode := !b.changed && b.existing.mode != b.Config.Mode
+	update_mode := !b.changed && b.existing.mode != b.Config.FileMode()
 	if update_mode {
-		err := os.Chmod(b.Config.Path, b.Config.Mode)
+		err := os.Chmod(b.Config.Path, b.Config.FileMode())
 		if err != nil {
 			return err
 		}

@@ -75,7 +75,7 @@ type (
 	// Certificate file configuration.
 	tCertificateFileConfig struct {
 		Path           string                `yaml:"path"`
-		Mode           os.FileMode           `yaml:"mode"`
+		Mode           *os.FileMode          `yaml:"mode"`
 		Owner          string                `yaml:"owner"`
 		Group          string                `yaml:"group"`
 		PrependFiles   []string              `yaml:"prepend_files"`
@@ -256,6 +256,15 @@ func (c *tCertFileUpdateConfig) Validate(handlers *tHandlers) error {
 		return fmt.Errorf("Command timeout must be >0.")
 	}
 	return nil
+}
+
+// Return the mode of a certificate file
+func (c *tCertificateFileConfig) FileMode() os.FileMode {
+	if c.Mode == nil {
+		return 0640
+	} else {
+		return *c.Mode
+	}
 }
 
 // Validate a certificate file configuration entry
