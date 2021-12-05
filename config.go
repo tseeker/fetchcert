@@ -86,7 +86,7 @@ type (
 
 	// Main configuration.
 	tConfiguration struct {
-		Socket       tSocketConfig            `yaml:"socket"`
+		Socket       *tSocketConfig           `yaml:"socket"`
 		LdapConfig   tLdapConfig              `yaml:"ldap"`
 		Handlers     tHandlers                `yaml:"handlers"`
 		Certificates []tCertificateFileConfig `yaml:"certificates"`
@@ -123,6 +123,9 @@ func (c *tSocketConfig) Validate() error {
 	}
 	if c.Group != "" && !isValidGroup(c.Group) {
 		return fmt.Errorf("Invalid group '%s'", c.Group)
+	}
+	if c.Mode == 0 {
+		c.Mode = 0640
 	}
 	return nil
 }
@@ -284,11 +287,13 @@ func (c *tCertificateFileConfig) Validate(handlers *tHandlers) error {
 
 // Validate the configuration
 func (c *tConfiguration) Validate() error {
-	err := c.Socket.Validate()
-	if err != nil {
-		return err
+	if c.Socket != nil {
+		err := c.Socket.Validate()
+		if err != nil {
+			return err
+		}
 	}
-	err = c.LdapConfig.Validate()
+	err := c.LdapConfig.Validate()
 	if err != nil {
 		return err
 	}
@@ -307,7 +312,6 @@ func (c *tConfiguration) Validate() error {
 // Create a configuration data structure containing default values.
 func defaultConfiguration() tConfiguration {
 	cfg := tConfiguration{}
-	cfg.Socket.Mode = 0640
 	cfg.LdapConfig.Defaults.TLS = "no"
 	cfg.LdapConfig.Structure.CAChaining = "seeAlso"
 	return cfg

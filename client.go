@@ -13,6 +13,9 @@ type TClient struct {
 
 // Initialize the client's state.
 func InitClient(config tConfiguration) TClient {
+	if config.Socket == nil {
+		log.Fatal("Cannot run in client mode without a socket configuration")
+	}
 	return TClient{
 		config: config,
 	}

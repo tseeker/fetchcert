@@ -39,7 +39,7 @@ type (
 	}
 )
 
-func configureSocket(cfg tSocketConfig) error {
+func configureSocket(cfg *tSocketConfig) error {
 	if cfg.Group != "" {
 		group, err := user.LookupGroup(cfg.Group)
 		if err != nil {
@@ -65,7 +65,7 @@ func configureSocket(cfg tSocketConfig) error {
 	return nil
 }
 
-func initSocket(cfg tSocketConfig) (net.Listener, error) {
+func initSocket(cfg *tSocketConfig) (net.Listener, error) {
 	listener, err := net.Listen("unix", cfg.Path)
 	if err != nil {
 		return nil, fmt.Errorf("Cannot listen on UNIX socket at %s: %w", cfg.Path, err)
@@ -157,6 +157,9 @@ func parseCommand(n int, buf []byte) *tCommand {
 
 // Initialize server state
 func InitServer(cfgFile string, config tConfiguration) TServerState {
+	if config.Socket == nil {
+		log.Fatal("Cannot run in server mode without a socket configuration")
+	}
 	ss := TServerState{
 		cfgFile: cfgFile,
 		config:  config,
