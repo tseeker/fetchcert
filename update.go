@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -243,16 +244,24 @@ func (u *tUpdate) runCommands(timeout int, commands []string, log *logrus.Entry)
 
 // Run a command through the `sh` shell.
 func (b *tUpdate) runCommand(timeout int, command string, log *logrus.Entry) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
-	defer cancel()
-
 	log = log.WithFields(logrus.Fields{
 		"command": command,
 		"timeout": timeout,
 	})
 	log.Debug("Executing command")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	go func() {
+		<-ctx.Done()
+		if ctx.Err() == context.DeadlineExceeded {
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+	}()
 	output, err := cmd.CombinedOutput()
+	cancel()
+
 	if len(output) != 0 {
 		if utf8.Valid(output) {
 			log = log.WithField("output", string(output))
