@@ -188,7 +188,7 @@ func (c *tLdapServerConfig) ApplyDefaults(dft tLdapConnectionConfig) {
 
 	// Default port based on TLS mode
 	if c.Port == 0 {
-		if c.TLS == "starttls" {
+		if c.TLS == "yes" {
 			c.Port = 636
 		} else {
 			c.Port = 389
